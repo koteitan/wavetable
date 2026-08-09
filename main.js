@@ -71,10 +71,10 @@ function harmDb(h, t) {
   const g1 = l - log2c1(t), g2 = l - log2c2(t);
   d += 18 * gate * Math.exp(-g1 * g1 / (2 * 0.35 * 0.35));
   d += 14 * gate * Math.exp(-g2 * g2 / (2 * 0.5 * 0.5));
-  // stair boost: 16 geometric steps h3 -> h1023 over t in [0.15, 0.45]
-  const s = smoothstep(0.15, 0.165, t) * (1 - smoothstep(0.435, 0.45, t));
+  // stair boost: 16 geometric steps h3 -> h1023 over t in [0.15, 0.75]
+  const s = smoothstep(0.15, 0.165, t) * (1 - smoothstep(0.735, 0.75, t));
   if (s > 0) {
-    const u = Math.min(1, Math.max(0, (t - 0.15) / 0.3));
+    const u = Math.min(1, Math.max(0, (t - 0.15) / 0.6));
     const k = Math.min(15, Math.floor(u * 16));
     const hs = Math.round(Math.pow(2, Math.log2(3) + (Math.log2(1023) - Math.log2(3)) * k / 15));
     if (h === hs) d += 10 * s;
@@ -110,11 +110,18 @@ const audio = new Float32Array(NSAMP);
       re[WIN - h] = re[h]; im[WIN - h] = -im[h];
     }
     fftInPlace(re, im);
-    let peak = 0;
-    for (let i = 0; i < WIN; i++) { const v = Math.abs(re[i]); if (v > peak) peak = v; }
+    let peak = 0, ipk = 0;
+    for (let i = 0; i < WIN; i++) {
+      const v = Math.abs(re[i]);
+      if (v > peak) { peak = v; ipk = i; }
+    }
     const sc = 0.95 / (peak || 1);
     const off = p * STRIDE;
-    for (let i = 0; i < WIN; i++) audio[off + i] = re[i] * sc;
+    // invert the polarity from the loudest sample to the cycle end: the
+    // discontinuity lands exactly on the amplitude peak (jump ~2x peak),
+    // a phase-locked edge that redistributes harmonics into sidebands
+    for (let i = 0; i < WIN; i++)
+      audio[off + i] = (i < ipk ? re[i] : -re[i]) * sc;
   }
 }
 
@@ -267,7 +274,7 @@ const ANNS = [
   { ax: 128, ay: 14, lx: 48, ly: 40, t: 'F1: h4→h48 上昇 (+18 dB)' },
   { ax: 64, ay: 211, lx: 90, ly: 420, t: 'F2: h500→h16 下降 (+14 dB)' },
   { ax: 208, ay: 30, lx: 170, ly: 95, t: 'F1×F2 交差 (f≈208)' },
-  { ax: 90, ay: 146, lx: 120, ly: 2.2, t: '階段ブースト h3→h1023 (+10 dB)' },
+  { ax: 140, ay: 146, lx: 120, ly: 2.2, t: '階段ブースト h3→h1023 (+10 dB)' },
   { ax: 230, ay: 90, lx: 175, ly: 280, t: '偶数次 −26 dB（奇数次のみへ）' },
 ];
 function drawAnnotations(ctx) {
