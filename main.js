@@ -51,7 +51,11 @@ function fftInPlace(re, im) {
 
 // ---------- DIY synthesis ----------
 // Each frame is one 2048-sample cycle built additively from a harmonic
-// amplitude recipe A_h(t), t = frame/256. Zero phase, pulse centered.
+// amplitude recipe A_h(t), t = frame/256. Phases follow a log down-TSP
+// (ESS style: equal group delay per octave, high harmonics first): the
+// pulse is dispersed over TSP_SPAN samples, which lowers the crest factor
+// to ~3-5 so per-cycle peak normalization yields a much higher RMS
+// (+7..+21 dB over zero phase depending on the frame).
 function smoothstep(a, b, x) {
   const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return u * u * (3 - 2 * u);
@@ -73,6 +77,20 @@ function harmDb(h, t) {
   return d;
 }
 
+// log down-TSP phase table: group delay decreases linearly in log2(h)
+// (equal time per octave), so the cycle is a centered descending sweep
+// spanning TSP_SPAN samples — highest harmonics first, fundamental last
+const TSP_SPAN = 1600; // dispersion length in samples (78% of the cycle)
+const PHI = new Float64Array(WIN / 2);
+{
+  const H = WIN / 2, t0 = (WIN - TSP_SPAN) / 2;
+  let acc = 0;
+  for (let h = 1; h < H; h++) {
+    acc += t0 + TSP_SPAN * (1 - Math.log2(h) / Math.log2(H));
+    PHI[h] = 2 * Math.PI / WIN * acc;
+  }
+}
+
 const NSAMP = NFRAMES * WIN;
 const audio = new Float32Array(NSAMP);
 {
@@ -81,9 +99,9 @@ const audio = new Float32Array(NSAMP);
     const t = p / (NFRAMES - 1);
     re.fill(0); im.fill(0);
     for (let h = 1; h < WIN / 2; h++) {
-      // (-1)^h centers the pulse mid-cycle (equivalent to a half-period shift)
-      const a = Math.pow(10, harmDb(h, t) / 20) * (h % 2 ? -1 : 1);
-      re[h] = a; re[WIN - h] = a;
+      const a = Math.pow(10, harmDb(h, t) / 20);
+      re[h] = a * Math.cos(PHI[h]); im[h] = a * Math.sin(PHI[h]);
+      re[WIN - h] = re[h]; im[WIN - h] = -im[h];
     }
     fftInPlace(re, im);
     let peak = 0;
@@ -224,7 +242,7 @@ function drawHeat() {
 }
 
 const ANNS = [
-  { ax: 1, ay: 80, lx: 8, ly: 180, t: 'インパルス: 全倍音 0 dB' },
+  { ax: 1, ay: 80, lx: 8, ly: 180, t: 'log down TSP: 全倍音 0 dB' },
   { ax: 24, ay: 2, lx: 16, ly: 1.35, t: 'ティルト 0→−4.8 dB/oct' },
   { ax: 128, ay: 14, lx: 48, ly: 40, t: 'F1: h4→h48 上昇 (+18 dB)' },
   { ax: 64, ay: 211, lx: 90, ly: 420, t: 'F2: h500→h16 下降 (+14 dB)' },

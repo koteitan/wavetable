@@ -18,7 +18,7 @@
 <header>
   <div>
     <h1>Impulse Morph — DIY wavetable</h1>
-    <p class="sub">加算合成による自作wavetable — インパルスからパラメータを時間発展。
+    <p class="sub">加算合成による自作wavetable — log down TSP からパラメータを時間発展。
        2048サンプル × 257フレーム, 基音 43.07 Hz（このページ内でリアルタイム合成）</p>
   </div>
   <div class="menu-wrap">
@@ -74,18 +74,20 @@
     <table>
       <thead><tr><th>フレーム</th><th>パラメータ</th></tr></thead>
       <tbody>
-        <tr><td>0</td><td>純インパルス: 全倍音が等振幅・ゼロ位相（中央に1本のパルス）</td></tr>
+        <tr><td>0</td><td>log down TSP: 全倍音が等振幅、高域→低域のチャープ（分散長1600サンプル ≈ 18.1 ms、オクターブ毎に等時間160サンプル）</td></tr>
         <tr><td>0–64</td><td>スペクトラルティルト 0 → −4.8 dB/oct（エネルギーが低次へ集中）</td></tr>
         <tr><td>5–31</td><td>フォルマント F1 (+18 dB)・F2 (+14 dB) がフェードイン</td></tr>
         <tr><td>0–256</td><td>F1: h4→h48 へ上昇 / F2: h500→h16 へ下降（対数スイープ、frame≈208 の h≈30 で交差）</td></tr>
         <tr><td>38–192</td><td>低次階段ブースト: h3→h7 を1本ずつ +10 dB</td></tr>
         <tr><td>159–243</td><td>偶数次を −26 dB（奇数次のみ = スクエア系へモーフ）</td></tr>
         <tr><td>154–256</td><td>ティルトを −4.8 → −3.0 dB/oct に緩和</td></tr>
+        <tr><td>全フレーム</td><td>log down TSP 位相を共通適用 — クレストファクターを 3.2〜4.7 まで低減し、正規化後のRMSをゼロ位相比 +7〜+21 dB 稼ぐ</td></tr>
         <tr><td>全フレーム</td><td>各周期をピーク 0.95 に正規化（full normalize）</td></tr>
       </tbody>
     </table>
     <p class="hint">A_h(t) [dB] = tilt(t)·log2(h) + F1(t,h) + F2(t,h) + stair(t,h) + even(t,h)。
        フォルマントは log2(h) 軸上のガウス形（F1: σ=0.35 oct, F2: σ=0.5 oct）。
+       位相は log down TSP（群遅延が log2(h) に線形 = オクターブ毎等時間、ESS型）で全フレーム共通。
        合成コードは main.js の「DIY synthesis」セクションにあります。</p>
   </section>
 </main>
