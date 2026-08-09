@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impulse Morph — DIY wavetable</title>
+<link rel="stylesheet" href="style.css">
+<script>
+(function(){
+  try {
+    var s = JSON.parse(localStorage.getItem('impulse-morph-ui') || '{}');
+    document.documentElement.classList.toggle('dark', s.dark !== false);
+  } catch(e) { document.documentElement.classList.add('dark'); }
+})();
+</script>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Impulse Morph — DIY wavetable</h1>
+    <p class="sub">加算合成による自作wavetable — インパルスからパラメータを時間発展。
+       2048サンプル × 257フレーム, 基音 43.07 Hz（このページ内でリアルタイム合成）</p>
+  </div>
+  <div class="menu-wrap">
+    <button id="menuBtn" aria-label="menu">☰</button>
+    <div id="menu" class="menu hidden">
+      <label><input type="checkbox" id="optDark"> ダークモード</label>
+      <label><input type="checkbox" id="optAnn"> 注釈を表示</label>
+      <label>表示倍音上限
+        <select id="optHmax">
+          <option value="128">128</option>
+          <option value="256">256</option>
+          <option value="512" selected>512</option>
+          <option value="1024">1024</option>
+        </select>
+      </label>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>倍音ヒートマップ（フレーム × 倍音番号, dB — 各フレーム最大基準）</h2>
+    <div class="heat-row">
+      <div id="heatWrap" class="canvas-stack">
+        <canvas id="heat"></canvas>
+        <canvas id="heatOv"></canvas>
+      </div>
+      <canvas id="cbar" width="46" height="430"></canvas>
+    </div>
+    <p class="hint">ドラッグ / クリックでフレーム選択 — 下の詳細と音がリアルタイムで追従します</p>
+  </section>
+
+  <section class="card">
+    <h2 id="detailTitle">フレーム詳細</h2>
+    <div class="detail-row">
+      <div class="detail-box">
+        <h3>1周期波形（2048サンプル）</h3>
+        <canvas id="wave"></canvas>
+      </div>
+      <div class="detail-box">
+        <h3>倍音スペクトラム（dB, フレーム最大基準）</h3>
+        <canvas id="spec"></canvas>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="playCycle">▶ このフレームをループ再生（43 Hz）</button>
+      <button id="playAll">▶ 全フレームを連続再生（5.97 s）</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>設計図（パラメータタイムライン）</h2>
+    <table>
+      <thead><tr><th>フレーム</th><th>パラメータ</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>純インパルス: 全倍音が等振幅・ゼロ位相（中央に1本のパルス）</td></tr>
+        <tr><td>0–64</td><td>スペクトラルティルト 0 → −4.8 dB/oct（エネルギーが低次へ集中）</td></tr>
+        <tr><td>5–31</td><td>フォルマント F1 (+18 dB)・F2 (+14 dB) がフェードイン</td></tr>
+        <tr><td>0–256</td><td>F1: h4→h48 へ上昇 / F2: h500→h16 へ下降（対数スイープ、frame≈208 の h≈30 で交差）</td></tr>
+        <tr><td>38–192</td><td>低次階段ブースト: h3→h7 を1本ずつ +10 dB</td></tr>
+        <tr><td>159–243</td><td>偶数次を −26 dB（奇数次のみ = スクエア系へモーフ）</td></tr>
+        <tr><td>154–256</td><td>ティルトを −4.8 → −3.0 dB/oct に緩和</td></tr>
+        <tr><td>全フレーム</td><td>各周期をピーク 0.95 に正規化（full normalize）</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">A_h(t) [dB] = tilt(t)·log2(h) + F1(t,h) + F2(t,h) + stair(t,h) + even(t,h)。
+       フォルマントは log2(h) 軸上のガウス形（F1: σ=0.35 oct, F2: σ=0.5 oct）。
+       合成コードは main.js の「DIY synthesis」セクションにあります。</p>
+  </section>
+</main>
+
+<div id="tooltip" class="tooltip hidden"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
