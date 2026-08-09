@@ -64,13 +64,37 @@ const tilt = t => -4.8 * smoothstep(0, 0.25, t) + 1.8 * smoothstep(0.6, 1, t); /
 const log2c1 = t => 2 + 3.585 * t;       // F1 center: h4 -> h48 (rising)
 const log2c2 = t => 8.966 - 4.966 * t;   // F2 center: h500 -> h16 (falling)
 
+// low-end PEQ: +30 dB peaking EQ, Q=4, center sweeping 120 -> 69 Hz so the
+// boost slides from the h2-h3 region down between h1 and h2 by the table end
+const PEQ_A = Math.pow(10, 30 / 40); // RBJ peaking prototype, A = sqrt(gain)
+const PEQ_Q = 4;
+function peqDb(h, t) {
+  const fc = 120 * Math.pow(69 / 120, t);
+  const w = h * FUND / fc;
+  const b = (1 - w * w) * (1 - w * w);
+  const num = b + (PEQ_A * w / PEQ_Q) * (PEQ_A * w / PEQ_Q);
+  const den = b + (w / (PEQ_A * PEQ_Q)) * (w / (PEQ_A * PEQ_Q));
+  return 10 * Math.log10(num / den);
+}
+
+// moving notches in the gaps between the peaks: F4 between F3(PEQ) and F1,
+// F5 between F1 and F2 (centers = geometric mean of the neighbours)
+const log2c3 = t => 1.4785 - 0.7985 * t;              // PEQ center in log2(h)
+const log2c4 = t => (log2c3(t) + log2c1(t)) / 2;      // h3.3 -> h8.8
+const log2c5 = t => (log2c1(t) + log2c2(t)) / 2;      // h44.7 -> h27.7
+
 function harmDb(h, t) {
   const l = Math.log2(h);
-  let d = tilt(t) * l;
+  let d = tilt(t) * l + peqDb(h, t);
   const gate = smoothstep(0.02, 0.12, t);
   const g1 = l - log2c1(t), g2 = l - log2c2(t);
-  d += 18 * gate * Math.exp(-g1 * g1 / (2 * 0.35 * 0.35));
-  d += 14 * gate * Math.exp(-g2 * g2 / (2 * 0.5 * 0.5));
+  // sigma chosen so the -3 dB width matches Q=8 (0.18 oct)
+  d += 18 * gate * Math.exp(-g1 * g1 / (2 * 0.149 * 0.149));
+  d += 14 * gate * Math.exp(-g2 * g2 / (2 * 0.13 * 0.13));
+  // F4/F5 notches: -10 dB, sigma 0.283 oct (-3 dB width matches Q=3)
+  const g4 = l - log2c4(t), g5 = l - log2c5(t);
+  d -= 10 * gate * Math.exp(-g4 * g4 / (2 * 0.283 * 0.283));
+  d -= 10 * gate * Math.exp(-g5 * g5 / (2 * 0.283 * 0.283));
   // stair boost: 16 geometric steps h3 -> h1023 over t in [0.15, 0.75]
   const s = smoothstep(0.15, 0.165, t) * (1 - smoothstep(0.735, 0.75, t));
   if (s > 0) {
@@ -265,7 +289,10 @@ function drawHeat() {
   ctx.fillText('倍音番号', 0, 0);
   ctx.restore();
 
-  if (state.ann) drawAnnotations(ctx);
+  if (state.ann) {
+    drawFLines(ctx);
+    drawAnnotations(ctx);
+  }
 }
 
 const ANNS = [
@@ -277,6 +304,46 @@ const ANNS = [
   { ax: 140, ay: 146, lx: 120, ly: 2.2, t: '階段ブースト h3→h1023 (+10 dB)' },
   { ax: 230, ay: 90, lx: 175, ly: 280, t: '偶数次 −26 dB（奇数次のみへ）' },
 ];
+// F1-F5 center trajectories, drawn as red dotted lines over the heatmap
+const FCURVES = [
+  { name: 'F1', fn: log2c1, lf: 10 },
+  { name: 'F2', fn: log2c2, lf: 40 },
+  { name: 'F3', fn: log2c3, lf: 10 },
+  { name: 'F4', fn: log2c4, lf: 70 },
+  { name: 'F5', fn: log2c5, lf: 10 },
+];
+function drawFLines(ctx) {
+  const red = state.dark ? '#ff8a80' : '#c93636';
+  ctx.strokeStyle = red;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  for (const c of FCURVES) {
+    ctx.beginPath();
+    let pen = false;
+    for (let f = 0; f <= 256; f += 2) {
+      const h = Math.pow(2, c.fn(f / 256));
+      if (h < 1 || h > state.hmax) { pen = false; continue; }
+      const x = xPix(f), y = yPix(h);
+      if (pen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); pen = true; }
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.font = 'bold 10px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  for (const c of FCURVES) {
+    const h = Math.pow(2, c.fn(c.lf / 256));
+    if (h < 1 || h > state.hmax) continue;
+    const x = xPix(c.lf) + 3, y = yPix(h) - 2;
+    ctx.strokeStyle = cssVar('--surface');
+    ctx.lineWidth = 3;
+    ctx.strokeText(c.name, x, y);
+    ctx.fillStyle = red;
+    ctx.fillText(c.name, x, y);
+  }
+}
+
 function drawAnnotations(ctx) {
   ctx.font = '11px system-ui';
   ctx.textAlign = 'left';
@@ -579,6 +646,55 @@ specCv.addEventListener('mousemove', ev => {
     `${v <= -60 ? '≤ −60' : v.toFixed(1)} dB`);
 });
 specCv.addEventListener('mouseleave', hideTip);
+
+// ---------- .vitaltable export ----------
+// Vital wavetable file: JSON with one Audio File Source component holding
+// the whole rendered audio as base64 16-bit little-endian PCM; two keyframes
+// scan it linearly with stride = window (2048), one cycle per frame
+function buildVitaltable() {
+  const i16 = new Int16Array(NSAMP);
+  for (let i = 0; i < NSAMP; i++) {
+    const v = Math.max(-1, Math.min(1, audio[i]));
+    i16[i] = Math.round(v * 32767);
+  }
+  const bytes = new Uint8Array(i16.buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 32768)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+  return {
+    author: 'koteitan',
+    full_normalize: true,
+    groups: [{
+      components: [{
+        audio_file: btoa(bin),
+        audio_sample_rate: AUDIO_SR,
+        fade_style: 3,          // frequency-domain interpolation
+        interpolation_style: 1,
+        keyframes: [
+          { position: 0, start_position: 0.0, window_fade: 1.0, window_size: 2048.0 },
+          { position: 256, start_position: (NFRAMES - 1) * STRIDE, window_fade: 1.0, window_size: 2048.0 },
+        ],
+        normalize_gain: false,
+        normalize_mult: false,
+        phase_style: 0,         // keep original phases (TSP + flip edges)
+        random_seed: 0,
+        type: 'Audio File Source',
+        window_size: 2048.0,
+      }],
+    }],
+    name: 'Impulse Morph',
+    remove_all_dc: true,
+    version: '1.5.5',
+  };
+}
+document.getElementById('expVt').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(buildVitaltable())], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ImpulseMorph.vitaltable';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
 
 // ---------- menu ----------
 const menu = document.getElementById('menu');

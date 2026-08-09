@@ -17,7 +17,7 @@
 <body>
 <header>
   <div>
-    <h1>Impulse Morph — DIY wavetable <span class="ver">v0.1.0</span></h1>
+    <h1>Impulse Morph — DIY wavetable <span class="ver">v0.1.1</span></h1>
     <p class="sub">加算合成による自作wavetable — log down TSP からパラメータを時間発展。
        2048サンプル × 257フレーム, 基音 43.07 Hz（このページ内でリアルタイム合成）</p>
   </div>
@@ -34,6 +34,7 @@
           <option value="1024">1024</option>
         </select>
       </label>
+      <button id="expVt">.vitaltable エクスポート</button>
     </div>
   </div>
 </header>
@@ -76,6 +77,8 @@
       <tbody>
         <tr><td>0</td><td>log down TSP: 全倍音が等振幅、高域→低域のチャープ（分散長1600サンプル ≈ 18.1 ms、オクターブ毎に等時間160サンプル）</td></tr>
         <tr><td>0–64</td><td>スペクトラルティルト 0 → −4.8 dB/oct（エネルギーが低次へ集中）</td></tr>
+        <tr><td>0–256</td><td>PEQ 低域ブースト: +30 dB, Q=4、中心 120 → 69 Hz（対数スイープ）— h2〜h3 の膨らみが h1〜h2 間へ滑り降りる</td></tr>
+        <tr><td>0–256</td><td>ノッチ F4 (144→378 Hz, F3–F1間) / F5 (1925→1193 Hz, F1–F2間): −10 dB, Q≈3 — 隣接ピークの幾何平均を追従する動くカット</td></tr>
         <tr><td>5–31</td><td>フォルマント F1 (+18 dB)・F2 (+14 dB) がフェードイン</td></tr>
         <tr><td>0–256</td><td>F1: h4→h48 へ上昇 / F2: h500→h16 へ下降（対数スイープ、frame≈208 の h≈30 で交差）</td></tr>
         <tr><td>38–192</td><td>階段ブースト: h3→h1023 を16段の等比ステップ（log2軸で等間隔、1段 ≈ 9.6フレーム）で +10 dB、最大倍音まで登る</td></tr>
@@ -86,8 +89,8 @@
         <tr><td>全フレーム</td><td>各周期をピーク 0.95 に正規化（full normalize）</td></tr>
       </tbody>
     </table>
-    <p class="hint">A_h(t) [dB] = tilt(t)·log2(h) + F1(t,h) + F2(t,h) + stair(t,h) + even(t,h)。
-       フォルマントは log2(h) 軸上のガウス形（F1: σ=0.35 oct, F2: σ=0.5 oct）。
+    <p class="hint">A_h(t) [dB] = tilt(t)·log2(h) + PEQ(t,h) + F1(t,h) + F2(t,h) + stair(t,h) + even(t,h)。
+       フォルマントは log2(h) 軸上のガウス形（F1: σ=0.149 oct, F2: σ=0.13 oct — −3dB幅で Q≈8 相当）。
        位相は log down TSP（群遅延が log2(h) に線形 = オクターブ毎等時間、ESS型）で全フレーム共通。
        合成コードは main.js の「DIY synthesis」セクションにあります。</p>
   </section>
