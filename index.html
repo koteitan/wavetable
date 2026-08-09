@@ -17,7 +17,7 @@
 <body>
 <header>
   <div>
-    <h1>Impulse Morph — DIY wavetable</h1>
+    <h1>Impulse Morph — DIY wavetable <span class="ver">v0.1.0</span></h1>
     <p class="sub">加算合成による自作wavetable — log down TSP からパラメータを時間発展。
        2048サンプル × 257フレーム, 基音 43.07 Hz（このページ内でリアルタイム合成）</p>
   </div>
@@ -40,7 +40,7 @@
 
 <main>
   <section class="card">
-    <h2>倍音ヒートマップ（フレーム × 倍音番号, dB — 各フレーム最大基準）</h2>
+    <h2>倍音ヒートマップ（フレーム × 倍音番号, dB — 近傍フレーム最大基準）</h2>
     <div class="heat-row">
       <div id="heatWrap" class="canvas-stack">
         <canvas id="heat"></canvas>
@@ -59,7 +59,7 @@
         <canvas id="wave"></canvas>
       </div>
       <div class="detail-box">
-        <h3>倍音スペクトラム（dB, フレーム最大基準）</h3>
+        <h3>倍音スペクトラム（dB, 近傍フレーム最大基準）</h3>
         <canvas id="spec"></canvas>
       </div>
     </div>
@@ -78,7 +78,7 @@
         <tr><td>0–64</td><td>スペクトラルティルト 0 → −4.8 dB/oct（エネルギーが低次へ集中）</td></tr>
         <tr><td>5–31</td><td>フォルマント F1 (+18 dB)・F2 (+14 dB) がフェードイン</td></tr>
         <tr><td>0–256</td><td>F1: h4→h48 へ上昇 / F2: h500→h16 へ下降（対数スイープ、frame≈208 の h≈30 で交差）</td></tr>
-        <tr><td>38–192</td><td>低次階段ブースト: h3→h7 を1本ずつ +10 dB</td></tr>
+        <tr><td>38–115</td><td>階段ブースト: h3→h1023 を16段の等比ステップ（log2軸で等間隔）で +10 dB、最大倍音まで駆け上がる</td></tr>
         <tr><td>159–243</td><td>偶数次を −26 dB（奇数次のみ = スクエア系へモーフ）</td></tr>
         <tr><td>154–256</td><td>ティルトを −4.8 → −3.0 dB/oct に緩和</td></tr>
         <tr><td>全フレーム</td><td>log down TSP 位相を共通適用 — クレストファクターを 3.2〜4.7 まで低減し、正規化後のRMSをゼロ位相比 +7〜+21 dB 稼ぐ</td></tr>

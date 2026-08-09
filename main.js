@@ -71,8 +71,14 @@ function harmDb(h, t) {
   const g1 = l - log2c1(t), g2 = l - log2c2(t);
   d += 18 * gate * Math.exp(-g1 * g1 / (2 * 0.35 * 0.35));
   d += 14 * gate * Math.exp(-g2 * g2 / (2 * 0.5 * 0.5));
-  const s = smoothstep(0.15, 0.2, t) * (1 - smoothstep(0.7, 0.75, t));
-  if (s > 0 && h === 2 + Math.floor(8 * t)) d += 10 * s;
+  // stair boost: 16 geometric steps h3 -> h1023 over t in [0.15, 0.45]
+  const s = smoothstep(0.15, 0.165, t) * (1 - smoothstep(0.435, 0.45, t));
+  if (s > 0) {
+    const u = Math.min(1, Math.max(0, (t - 0.15) / 0.3));
+    const k = Math.min(15, Math.floor(u * 16));
+    const hs = Math.round(Math.pow(2, Math.log2(3) + (Math.log2(1023) - Math.log2(3)) * k / 15));
+    if (h === hs) d += 10 * s;
+  }
   if (h % 2 === 0) d -= 26 * smoothstep(0.62, 0.95, t);
   return d;
 }
@@ -121,14 +127,28 @@ function fftMag(src) {
   return m;
 }
 
+// normalize each frame against the max of its ±8-frame neighborhood, so a
+// single boosted harmonic (e.g. stair on top of a formant) doesn't yank the
+// whole column darker at each step boundary
 const dbArr = new Float32Array(NFRAMES * NH);
-for (let p = 0; p < NFRAMES; p++) {
-  const m = fftMag(audio.subarray(p * STRIDE, p * STRIDE + WIN));
-  let fmax = 0;
-  for (let k = 1; k < NH; k++) if (m[k] > fmax) fmax = m[k];
-  for (let k = 0; k < NH; k++) {
-    const v = 20 * Math.log10(m[k] / (fmax || 1) + 1e-12);
-    dbArr[p * NH + k] = v < -60 ? -60 : (v > 0 ? 0 : v);
+{
+  const mags = new Float32Array(NFRAMES * NH);
+  const frameMax = new Float32Array(NFRAMES);
+  for (let p = 0; p < NFRAMES; p++) {
+    const m = fftMag(audio.subarray(p * STRIDE, p * STRIDE + WIN));
+    mags.set(m, p * NH);
+    let fmax = 0;
+    for (let k = 1; k < NH; k++) if (m[k] > fmax) fmax = m[k];
+    frameMax[p] = fmax;
+  }
+  for (let p = 0; p < NFRAMES; p++) {
+    let ref = 0;
+    for (let q = Math.max(0, p - 8); q <= Math.min(NFRAMES - 1, p + 8); q++)
+      if (frameMax[q] > ref) ref = frameMax[q];
+    for (let k = 0; k < NH; k++) {
+      const v = 20 * Math.log10(mags[p * NH + k] / (ref || 1) + 1e-12);
+      dbArr[p * NH + k] = v < -60 ? -60 : (v > 0 ? 0 : v);
+    }
   }
 }
 const db = (p, h) => dbArr[p * NH + h];
@@ -247,7 +267,7 @@ const ANNS = [
   { ax: 128, ay: 14, lx: 48, ly: 40, t: 'F1: h4→h48 上昇 (+18 dB)' },
   { ax: 64, ay: 211, lx: 90, ly: 420, t: 'F2: h500→h16 下降 (+14 dB)' },
   { ax: 208, ay: 30, lx: 170, ly: 95, t: 'F1×F2 交差 (f≈208)' },
-  { ax: 96, ay: 5, lx: 120, ly: 2.2, t: '階段ブースト h3→h7 (+10 dB)' },
+  { ax: 90, ay: 146, lx: 120, ly: 2.2, t: '階段ブースト h3→h1023 (+10 dB)' },
   { ax: 230, ay: 90, lx: 175, ly: 280, t: '偶数次 −26 dB（奇数次のみへ）' },
 ];
 function drawAnnotations(ctx) {
